@@ -12,6 +12,3 @@ COPY files/influxdb.conf /etc/influxdb/influxdb.conf
 # Copy entrypoint script
 COPY files/retention_policy.sh /docker-entrypoint-initdb.d/
 # Entrypoint
-
-# Pretty much the same as the base
-

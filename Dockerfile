@@ -1,5 +1,5 @@
 ARG DOCKER_REGISTRY="registry.cloud.mov.ai"
-ARG INFLUXDB_VERSION="1.8.10-alpine"
+ARG INFLUXDB_VERSION="2.7-alpine"
 FROM influxdb:${INFLUXDB_VERSION}
 
 # Labels

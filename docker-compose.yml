@@ -1,0 +1,96 @@
+services:
+  influxdb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INFLUXDB_VERSION: ${INFLUXDB_VERSION:-1.12.2-alpine}
+    ports:
+      - "8086:8086"
+    environment:
+      # Database configuration
+      - INFLUX_DATABASE=${INFLUX_DATABASE:-telegraf logs metrics}
+      - INFLUX_DATABASE_RETENTION=${INFLUX_DATABASE_RETENTION:-7d}
+      - INFLUX_DATABASE_REPLICATION=${INFLUX_DATABASE_REPLICATION:-1}
+      - INFLUX_DATABASE_SHARD_DURATION=${INFLUX_DATABASE_SHARD_DURATION:-1h}
+
+      # Admin credentials (uncomment for production)
+      # - INFLUXDB_ADMIN_USER=${INFLUXDB_ADMIN_USER}
+      # - INFLUXDB_ADMIN_PASSWORD=${INFLUXDB_ADMIN_PASSWORD}
+
+      # Memory optimization
+      - INFLUXD_REPORTING_DISABLED=${INFLUXD_REPORTING_DISABLED:-true}
+      - INFLUXD_STORAGE_CACHE_MAX_MEMORY_SIZE=${INFLUXD_STORAGE_CACHE_MAX_MEMORY_SIZE:-419430400}
+      - INFLUXD_STORAGE_CACHE_SNAPSHOT_WRITE_COLD_DURATION=${INFLUXD_STORAGE_CACHE_SNAPSHOT_WRITE_COLD_DURATION:-120s}
+      - INFLUXD_STORAGE_COMPACT_FULL_WRITE_COLD_DURATION=${INFLUXD_STORAGE_COMPACT_FULL_WRITE_COLD_DURATION:-1h0m0s}
+      - INFLUXD_STORAGE_COMPACT_THROUGHPUT_BURST=${INFLUXD_STORAGE_COMPACT_THROUGHPUT_BURST:-8388608}
+      - INFLUXD_STORAGE_MAX_CONCURRENT_COMPACTIONS=${INFLUXD_STORAGE_MAX_CONCURRENT_COMPACTIONS:-2}
+      - INFLUXD_STORAGE_SERIES_FILE_MAX_CONCURRENT_SNAPSHOT_COMPACTIONS=${INFLUXD_STORAGE_SERIES_FILE_MAX_CONCURRENT_SNAPSHOT_COMPACTIONS:-2}
+
+      # Timezone
+      - TZ=${TZ:-UTC}
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+    restart: always
+    healthcheck:
+      test: ["CMD", "echo", ">", "/dev/tcp/localhost/8086"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    networks:
+      - influxdb_network
+  monitoring:
+    image: pubregistry.aws.cloud.mov.ai/ce/monitoring:v1.0.2
+    ports:
+      - "8888:8888"
+    networks:
+      - influxdb_network
+    volumes:
+      - monitoring-chronograf:/var/lib/chronograf
+      - monitoring-kapacitor:/var/lib/kapacitor
+    restart: always
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    environment:
+      - TZ=Europe/Lisbon
+      - TZDATA_TZ=Europe/Lisbon
+      - TZDATA=/usr/share/zoneinfo
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_USERNAME=telegraf
+      - INFLUXDB_PASSWORD=telegraf
+      - KAPACITOR_SLACK_URL=
+      - KAPACITOR_SLACK_CHANNEL=
+      - KAPACITOR_SLACK_WORKSPACE=
+      - KAPACITOR_SLACK_ENABLED=true
+  # Optional: Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    networks:
+      - influxdb_network
+    profiles:
+      - dashboards
+
+volumes:
+  influxdb_data:
+    driver: local
+  grafana_data:
+    driver: local
+  monitoring-chronograf:
+    driver: local
+  monitoring-kapacitor:
+    driver: local
+
+networks:
+  influxdb_network:
+    driver: bridge
